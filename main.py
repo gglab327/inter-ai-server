@@ -37,7 +37,7 @@ async def chat_endpoint(request: ChatRequest):
 
     # Формируем стандартное JSON-тело для продвинутого бесплатного шлюза Pollinations
     payload = {
-        "model": "openai",  # Используем стабильную модель
+        "model": "p1",  # Используем стабильную модель
         "messages": [
             {
                 "role": "user",
