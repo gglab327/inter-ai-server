@@ -43,7 +43,7 @@ async def chat_endpoint(request: ChatRequest):
         encoded_prompt = urllib.parse.quote(final_prompt)
         
         # Используем ГАРАНТИРОВАННО БЕСПЛАТНЫЙ GET-эндпоинт text.pollinations.ai, который никогда не просит ключи
-        url = f"https://pollinations.ai/{encoded_prompt}?model=search"
+        url = f"https://pollinations.ai/{encoded_prompt}&model=search"
         
         response = requests.get(url, timeout=30)
         
