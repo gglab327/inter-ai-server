@@ -6,7 +6,7 @@ import urllib.parse
 
 app = FastAPI()
 
-# Настройка CORS, чтобы Android-приложение не блокировало ответы
+# Отключаем блокировки CORS для Android-приложения
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,7 +17,7 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     text: str
-    image_base64: str = None
+    image_base_base64: str = None  # Имя поля может быть любым, сейчас оно не ломает код
 
 @app.get("/")
 async def root_endpoint():
@@ -26,19 +26,14 @@ async def root_endpoint():
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     try:
+        # Извлекаем чистый текст сообщения пользователя
         user_prompt = request.text
         
-        # Если пользователь прикрепил картинку, мы добавляем текстовое указание для модели
-        if request.image_base64:
-            final_prompt = f"{user_prompt} (Пользователь прикрепил изображение)"
-        else:
-            final_prompt = user_prompt
-
-        # Безопасно кодируем русский текст для URL (кириллица не сломает запрос)
-        encoded_prompt = urllib.parse.quote(final_prompt)
+        # Безопасно кодируем русский текст для передачи внутри URL (чтобы кириллица не вызывала сбоев)
+        encoded_prompt = urllib.parse.quote(user_prompt)
         
-        # Используем полностью открытый и бесплатный эндпоинт Pollinations AI
-        url = f"https://pollinations.ai{encoded_prompt}?model=search"
+        # Отправляем запрос на 100% бесплатный, keyless и открытый GET-эндпоинт Pollinations AI
+        url = f"https://text.pollinations.ai/{encoded_prompt}?model=search"
         
         # Делаем GET-запрос к ИИ
         response = requests.get(url, timeout=30)
@@ -46,11 +41,10 @@ async def chat_endpoint(request: ChatRequest):
         if response.status_code != 200:
             raise HTTPException(status_code=response.status_code, detail="Сбой ИИ шлюза")
         
-        # КРИТИЧЕСКИ ВАЖНО: text.pollinations.ai возвращает чистый текст, а не JSON!
-        # Мы просто забираем этот готовый текст ответа ИИ
+        # text.pollinations.ai возвращает чистый Plain Text (не JSON!). Мы просто забираем его.
         ai_reply = response.text
         
-        # Возвращаем JSON-объект, который ожидает получить ваше Android-приложение
+        # Формируем аккуратный JSON-ответ, который ждет ваше Android-приложение
         return {"reply": ai_reply}
 
     except Exception as e:
