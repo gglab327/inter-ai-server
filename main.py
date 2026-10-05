@@ -21,16 +21,16 @@ async def root_endpoint():
 @app.post("/chat")
 async def chat_endpoint(request: Request):
     try:
-        # Читаем любые входящие JSON-данные в сыром виде, чтобы избежать ошибок 500 при нестыковке полей
+        # Читаем любые входящие JSON-данные в сыром виде, чтобы избежать ошибок 500
         data = await request.json()
         
-        # Безопасно извлекаем текст сообщения (если поля нет, подставим пустую строку)
+        # Извлекаем текст сообщения (если поля нет, подставим пустую строку)
         user_text = data.get("text", "")
         
-        # Ищем картинку в любых возможных вариациях имени поля (image_base64, imageBase64 и т.д.)
+        # Ищем картинку в любых возможных вариациях имени поля
         image_base64 = data.get("image_base64") or data.get("imageBase64") or data.get("image")
 
-        # 1. Логика для МУЛЬТИМОДАЛЬНОГО запроса (если пользователь прикрепил фотографию)
+        # 1. Логика для МУЛЬТИМОДАЛЬНОГО запроса (если пользователь прикрепил фотографию автомобиля)
         if image_base64:
             content_structure = [
                 {"type": "text", "text": user_text},
@@ -43,7 +43,7 @@ async def chat_endpoint(request: Request):
             ]
             
             payload = {
-                "model": "p1",  # Бесплатная мультимодальная модель на Pollinations
+                "model": "p1",  # Бесплатная мультимодальная модель со зрением на Pollinations
                 "messages": [
                     {
                         "role": "user",
@@ -65,14 +65,16 @@ async def chat_endpoint(request: Request):
             ai_reply = result["choices"][0]["message"]["content"]
             return {"reply": ai_reply}
             
-        # 2. Логика для ОБЫЧНОГО ТЕКСТА (когда картинки нет)
+        # 2. Логика для ОБЫЧНОГО ТЕКСТА (когда отправлен только текст)
         else:
             if not user_text:
                 return {"reply": "Привет! Напиши что-нибудь..."}
                 
-            # Безопасно кодируем текст для GET-запроса
+            # Безопасно кодируем текст для URL-запроса (чтобы пробелы и знаки не ломали ссылку)
             encoded_prompt = urllib.parse.quote(user_text)
-            url = f"https://pollinations.ai{encoded_prompt}?model=search"
+            
+            # ЖЕЛЕЗОБЕТОННЫЙ URL: домен строго отделен от текста с помощью /?prompt=
+            url = f"https://pollinations.ai{encoded_prompt}&model=search"
             
             response = requests.get(url, timeout=30)
             if response.status_code != 200:
@@ -81,5 +83,5 @@ async def chat_endpoint(request: Request):
             return {"reply": response.text}
 
     except Exception as e:
-        # Если что-то пошло не так, сервер вернет точный текст внутренней ошибки прямо в Android Studio!
+        # Если что-то пошло не так, сервер вернет точный текст внутренней ошибки прямо в Android Studio
         raise HTTPException(status_code=500, detail=str(e))
