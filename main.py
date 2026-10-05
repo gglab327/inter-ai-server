@@ -1,6 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import requests
 import urllib.parse
 
@@ -15,33 +14,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class ChatRequest(BaseModel):
-    text: str
-    image_base64: str = None  # Имя поля строго совпадает с вашим Android-приложением!
-
 @app.get("/")
 async def root_endpoint():
     return {"status": "Сервер Inter AI успешно запущен и работает!"}
 
 @app.post("/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: Request):
     try:
-        # 1. Проверяем, прикрепил ли пользователь изображение (имя переменной исправлено!)
-        if request.image_base64:
-            # Формируем массив контента для мультимодальной нейросети со "зрением"
+        # Читаем любые входящие JSON-данные в сыром виде, чтобы избежать ошибок 500 при нестыковке полей
+        data = await request.json()
+        
+        # Безопасно извлекаем текст сообщения (если поля нет, подставим пустую строку)
+        user_text = data.get("text", "")
+        
+        # Ищем картинку в любых возможных вариациях имени поля (image_base64, imageBase64 и т.д.)
+        image_base64 = data.get("image_base64") or data.get("imageBase64") or data.get("image")
+
+        # 1. Логика для МУЛЬТИМОДАЛЬНОГО запроса (если пользователь прикрепил фотографию)
+        if image_base64:
             content_structure = [
-                {"type": "text", "text": request.text},
+                {"type": "text", "text": user_text},
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/jpeg;base64,{request.image_base64}"
+                        "url": f"data:image/jpeg;base64,{image_base64}"
                     }
                 }
             ]
             
-            # Упаковываем JSON-тело для официального шлюза completions
             payload = {
-                "model": "p1",  # Бесплатная мультимодальная модель
+                "model": "p1",  # Бесплатная мультимодальная модель на Pollinations
                 "messages": [
                     {
                         "role": "user",
@@ -50,7 +52,6 @@ async def chat_endpoint(request: ChatRequest):
                 ]
             }
             
-            # Отправляем POST-запрос на ПРАВИЛЬНЫЙ адрес шлюза генерации
             response = requests.post(
                 "https://pollinations.ai",
                 json=payload,
@@ -58,18 +59,19 @@ async def chat_endpoint(request: ChatRequest):
             )
             
             if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail="Сбой ИИ при анализе фотографии")
+                raise HTTPException(status_code=response.status_code, detail="Сбой ИИ при анализе фото")
                 
             result = response.json()
-            # Безопасно извлекаем ответ ИИ по официальной структуре OpenAI
             ai_reply = result["choices"][0]["message"]["content"]
             return {"reply": ai_reply}
             
+        # 2. Логика для ОБЫЧНОГО ТЕКСТА (когда картинки нет)
         else:
-            # 2. Если картинки НЕТ (отправлен простой текст), используем открытый GET-эндпоинт
-            encoded_prompt = urllib.parse.quote(request.text)
-            
-            # ИСПРАВЛЕНО: Добавлен правильный субдомен text. и разделительный слэш /
+            if not user_text:
+                return {"reply": "Привет! Напиши что-нибудь..."}
+                
+            # Безопасно кодируем текст для GET-запроса
+            encoded_prompt = urllib.parse.quote(user_text)
             url = f"https://pollinations.ai{encoded_prompt}?model=search"
             
             response = requests.get(url, timeout=30)
@@ -79,4 +81,5 @@ async def chat_endpoint(request: ChatRequest):
             return {"reply": response.text}
 
     except Exception as e:
+        # Если что-то пошло не так, сервер вернет точный текст внутренней ошибки прямо в Android Studio!
         raise HTTPException(status_code=500, detail=str(e))
